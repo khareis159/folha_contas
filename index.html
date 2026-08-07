@@ -123,7 +123,6 @@
             overflow: hidden;
         }
 
-        /* Rolagem suave em celulares */
         .scrollable-area {
             width: 100%;
             overflow-x: auto;
@@ -133,7 +132,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 650px; /* Garante estrutura legível em telas pequenas */
+            min-width: 650px;
         }
 
         th {
@@ -148,10 +147,9 @@
 
         td {
             border-bottom: 1px solid var(--border-color);
-            padding: 0; /* Zera padding para os inputs preencherem a célula */
+            padding: 0;
         }
 
-        /* Estilização dos inputs embutidos */
         td input {
             background: transparent;
             border: none;
@@ -169,7 +167,6 @@
             background-color: var(--bg-input-focus);
         }
 
-        /* Estilos específicos das colunas de sinalização */
         .col-date { width: 85px; }
         .col-desc { width: auto; }
         .col-owed { width: 110px; }
@@ -177,17 +174,14 @@
         .col-balance { width: 110px; }
         .col-action { width: 45px; text-align: center; }
 
-        /* Cores aplicadas aos inputs */
         td.owed-cell input { color: var(--color-owed); font-weight: bold; }
         td.paid-cell input { color: var(--color-paid); font-weight: bold; }
         td.balance-cell input { color: var(--color-balance); font-weight: bold; }
 
-        /* Coluna de saldo é apenas leitura */
         td.balance-cell input {
             pointer-events: none;
         }
 
-        /* Botão para apagar linha diretamente */
         .delete-btn {
             background: none;
             border: none;
@@ -206,7 +200,7 @@
         }
 
         /* ========================================
-           LINHA DE TOTAIS (RESULTADOS ATUAIS)
+           LINHA DE TOTAIS
            ======================================== */
         .totals-row {
             background-color: rgba(255, 255, 255, 0.04);
@@ -276,7 +270,33 @@
         }
 
         /* ========================================
-           MODULO: GUIA DE AJUDA COMPLETO
+           SISTEMA DE CONTADOR DE ACESSOS (PERFORMANCE)
+           ======================================== */
+        .performance-bar {
+            max-width: 900px;
+            width: 100%;
+            margin: 8px auto;
+            background-color: rgba(255, 255, 255, 0.01);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .performance-bar strong {
+            font-family: var(--font-family);
+        }
+
+        .stat-global { color: var(--color-balance); }
+        .stat-local { color: var(--color-paid); }
+
+        /* ========================================
+           GUIA DE AJUDA
            ======================================== */
         .guide-overlay {
             position: fixed;
@@ -456,7 +476,15 @@
     </div>
 
     <!-- ========================================
-         MODULO DE GUIA DE AJUDA (RETREÁTIL)
+         SISTEMA DE CONTADOR DE ACESSOS (PERFORMANCE)
+         ======================================== -->
+    <div class="performance-bar">
+        <span>🌐 Acessos Globais: <strong id="globalVisits" class="stat-global">Carregando...</strong></span>
+        <span>👤 Seus Acessos: <strong id="localVisits" class="stat-local">0</strong></span>
+    </div>
+
+    <!-- ========================================
+         MODULO DE GUIA DE AJUDA
          ======================================== -->
     <div class="guide-overlay" id="guideOverlay" onclick="toggleHelp()">
         <div class="guide-container" onclick="event.stopPropagation()">
@@ -472,13 +500,13 @@
 
                 <div>
                     <h3>2. Entrada e Edição de Dados</h3>
-                    <p>Para preencher ou alterar qualquer dado, basta tocar diretamente na célula desejada da tabela (Data, Descrição, Valor Deve ou Valor Pago) e digitar. Os cálculos são automáticos.</p>
+                    <p>Para preencher ou alterar qualquer dado, basta clicar ou tocar diretamente na célula desejada da tabela (Data, Descrição, Valor Deve ou Valor Pago) e digitar. Os cálculos são atualizados em tempo real.</p>
                 </div>
 
                 <div>
                     <h3>3. Entenda os Cálculos (Cores)</h3>
                     <ul>
-                        <li><span class="badge badge-owed">Valor Deve (Vermelho)</span>: Representa o total de um parcelamento ou compromisso assumido. Não diminui seu saldo imediatamente; serve para monitorar sua obrigação.</li>
+                        <li><span class="badge badge-owed">Valor Deve (Vermelho)</span>: Representa o total de um parcelamento ou compromisso assumido. Não diminui seu saldo imediatamente; serve para monitorar sua obrigação pendente.</li>
                         <li><span class="badge badge-paid">Valor Pago (Azul)</span>: O dinheiro real que saiu do seu bolso. Reduz diretamente seu saldo acumulado.</li>
                         <li><span class="badge badge-balance">Saldo (Amarelo)</span>: Dinheiro líquido em caixa linha a linha, calculado progressivamente baseado no seu "Principal Inicial" e nos pagamentos executados.</li>
                     </ul>
@@ -524,6 +552,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadFromStorage();
             applyTheme();
+            incrementVisits();
         });
 
         // TEMA CLARO/ESCURO
@@ -668,6 +697,35 @@
                 document.getElementById('principalInput').value = 0;
                 document.getElementById('sheetBody').innerHTML = '';
                 recalculateSheet();
+            }
+        }
+
+        // SISTEMA DE VISITAS (CONTADOR DE ACESSOS)
+        async function incrementVisits() {
+            const globalEl = document.getElementById('globalVisits');
+            const localEl = document.getElementById('localVisits');
+            
+            // 1. Contador Local
+            let localCount = parseInt(localStorage.getItem('fci_local_visits')) || 0;
+            localCount++;
+            localStorage.setItem('fci_local_visits', localCount);
+            if (localEl) localEl.textContent = localCount;
+
+            // 2. Contador Global (API Resiliente)
+            try {
+                // Utilizando namespace único para garantir integridade das estatísticas do FCI
+                const namespace = "fci_carlos_reis_2026";
+                const response = await fetch(`https://api.counterapi.dev/v1/${namespace}/visits/up`);
+                if (!response.ok) throw new Error("Erro na resposta do servidor.");
+                const data = await response.json();
+                if (globalEl && data.count) {
+                    globalEl.textContent = data.count.toLocaleString('pt-BR');
+                }
+            } catch (err) {
+                console.warn("Serviço de contador global indisponível. Usando apenas contador local offline.");
+                if (globalEl) {
+                    globalEl.textContent = "Offline";
+                }
             }
         }
 
