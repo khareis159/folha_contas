@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Folha de Contas Inteligente</title>
+    <style>
+        /* ========================================
+           ESTILO E CORES DA SINALIZAÇÃO
+           ======================================== */
+        :root {
+            --bg-primary: #0a0f1d;      /* Slate escuro para conforto visual */
+            --bg-card: #131a2e;
+            --border-color: #2a3654;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            
+            /* Sinalização de Cores Solicitadas */
+            --color-owed: #f87171;      /* Vermelho para 'Valor Deve' */
+            --color-paid: #60a5fa;      /* Azul para 'Valor Pago' */
+            --color-balance: #fbbf24;   /* Amarelo para 'Saldo' */
+            
+            --bg-input-focus: #1e294b;
+            --font-family: monospace, Courier, sans-serif;
+            --bg-modal: rgba(10, 15, 29, 0.95);
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            
+            --color-owed: #dc2626;
+            --color-paid: #2563eb;
+            --color-balance: #d97706;
+            --bg-modal: rgba(248, 250, 252, 0.95);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 12px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        /* ========================================
+           CABEÇALHO DA PLANILHA
+           ======================================== */
+        .sheet-header {
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto 12px auto;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-top h1 {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .principal-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .principal-row label {
+            color: var(--text-secondary);
+        }
+
+        .principal-row input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px dashed var(--color-balance);
+            color: var(--color-balance);
+            font-weight: bold;
+            font-size: 1rem;
+            width: 100px;
+            outline: none;
+            font-family: var(--font-family);
+        }
+
+        /* ========================================
+           ESTRUTURA DA TABELA DE ENTRADAS
+           ======================================== */
+        .table-wrapper {
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Rolagem suave em celulares */
+        .scrollable-area {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 650px; /* Garante estrutura legível em telas pequenas */
+        }
+
+        th {
+            background-color: rgba(255, 255, 255, 0.02);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: bold;
+            text-align: left;
+            border-bottom: 2px solid var(--border-color);
+            padding: 8px;
+        }
+
+        td {
+            border-bottom: 1px solid var(--border-color);
+            padding: 0; /* Zera padding para os inputs preencherem a célula */
+        }
+
+        /* Estilização dos inputs embutidos */
+        td input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            width: 100%;
+            height: 38px;
+            padding: 8px;
+            font-size: 0.85rem;
+            outline: none;
+            font-family: var(--font-family);
+            transition: background-color 0.2s;
+        }
+
+        td input:focus {
+            background-color: var(--bg-input-focus);
+        }
+
+        /* Estilos específicos das colunas de sinalização */
+        .col-date { width: 85px; }
+        .col-desc { width: auto; }
+        .col-owed { width: 110px; }
+        .col-paid { width: 110px; }
+        .col-balance { width: 110px; }
+        .col-action { width: 45px; text-align: center; }
+
+        /* Cores aplicadas aos inputs */
+        td.owed-cell input { color: var(--color-owed); font-weight: bold; }
+        td.paid-cell input { color: var(--color-paid); font-weight: bold; }
+        td.balance-cell input { color: var(--color-balance); font-weight: bold; }
+
+        /* Coluna de saldo é apenas leitura */
+        td.balance-cell input {
+            pointer-events: none;
+        }
+
+        /* Botão para apagar linha diretamente */
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .delete-btn:hover {
+            color: var(--color-owed);
+        }
+
+        /* ========================================
+           LINHA DE TOTAIS (RESULTADOS ATUAIS)
+           ======================================== */
+        .totals-row {
+            background-color: rgba(255, 255, 255, 0.04);
+            font-weight: bold;
+        }
+
+        .totals-row td {
+            padding: 10px 8px;
+            font-size: 0.85rem;
+            border-top: 2px solid var(--border-color);
+        }
+
+        .totals-label {
+            color: var(--text-secondary);
+        }
+
+        .totals-owed { color: var(--color-owed); }
+        .totals-paid { color: var(--color-paid); }
+        .totals-balance { color: var(--color-balance); }
+
+        /* ========================================
+           BOTÕES E OPERAÇÕES AUXILIARES
+           ======================================== */
+        .action-bar {
+            max-width: 900px;
+            width: 100%;
+            margin: 12px auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--border-color);
+        }
+
+        .btn-add {
+            background-color: var(--bg-card);
+            border: 1px dashed var(--color-paid);
+            color: var(--color-paid);
+        }
+
+        .swipe-info {
+            text-align: center;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        @media (min-width: 769px) {
+            .swipe-info { display: none; }
+        }
+
+        /* ========================================
+           MODULO: GUIA DE AJUDA COMPLETO
+           ======================================== */
+        .guide-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-modal);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .guide-overlay.active {
+            display: flex;
+        }
+
+        .guide-container {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .guide-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .guide-header h2 {
+            font-size: 1.1rem;
+            color: var(--color-balance);
+        }
+
+        .guide-content {
+            padding: 16px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .guide-content h3 {
+            font-size: 0.95rem;
+            border-left: 3px solid var(--color-balance);
+            padding-left: 8px;
+            margin-bottom: 4px;
+        }
+
+        .guide-content p, .guide-content ul {
+            color: var(--text-primary);
+            margin-left: 4px;
+        }
+
+        .guide-content ul {
+            list-style-type: square;
+            padding-left: 16px;
+        }
+
+        .guide-content li {
+            margin-bottom: 6px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.75rem;
+        }
+
+        .badge-owed { background-color: rgba(248, 113, 113, 0.15); color: var(--color-owed); }
+        .badge-paid { background-color: rgba(96, 165, 250, 0.15); color: var(--color-paid); }
+        .badge-balance { background-color: rgba(251, 191, 36, 0.15); color: var(--color-balance); }
+
+        /* ========================================
+           RODAPÉ E CRÉDITOS EXIGIDOS
+           ======================================== */
+        footer {
+            max-width: 900px;
+            width: 100%;
+            margin: auto auto 0 auto;
+            padding: 16px 8px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-align: center;
+            line-height: 1.4;
+            border-top: 1px dashed var(--border-color);
+        }
+
+        footer a {
+            color: var(--color-balance);
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ========================================
+         CABEÇALHO DA FOLHA
+         ======================================== -->
+    <div class="sheet-header">
+        <div class="header-top">
+            <h1>Diário de Contas Inteligente</h1>
+            <div class="header-actions">
+                <button class="btn" style="padding: 4px 8px; font-size:0.7rem;" onclick="toggleHelp()">📖 Ajuda</button>
+                <button class="btn" style="padding: 4px 8px; font-size:0.7rem;" onclick="toggleTheme()">🌓 Tema</button>
+            </div>
+        </div>
+        <div class="principal-row">
+            <label>Principal inicial:</label>
+            <span>R$</span>
+            <input type="number" id="principalInput" value="900" step="0.01" oninput="recalculateSheet()">
+        </div>
+    </div>
+
+    <!-- ========================================
+         CORPO DA PLANILHA (TABELA)
+         ======================================== -->
+    <div class="table-wrapper">
+        <div class="scrollable-area">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-date">Dt</th>
+                        <th class="col-desc">Descrição: (Compra/Conta)</th>
+                        <th class="col-owed" style="color: var(--color-owed);">Valor Deve</th>
+                        <th class="col-paid" style="color: var(--color-paid);">Valor Pago</th>
+                        <th class="col-balance" style="color: var(--color-balance);">Saldo</th>
+                        <th class="col-action"></th>
+                    </tr>
+                </thead>
+                <tbody id="sheetBody">
+                    <!-- Linhas geradas dinamicamente via JS -->
+                </tbody>
+                <tfoot>
+                    <tr class="totals-row">
+                        <td id="totalsDate" class="totals-label">06/08</td>
+                        <td class="totals-label">Resultados atuais:</td>
+                        <td id="totalsOwed" class="totals-owed">0,00</td>
+                        <td id="totalsPaid" class="totals-paid">0,00</td>
+                        <td id="totalsBalance" class="totals-balance">0,00</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <div class="swipe-info">Arraste a tabela para os lados se precisar visualizar tudo ↔</div>
+
+    <!-- ========================================
+         BARRA DE OPERAÇÕES DA PLANILHA
+         ======================================== -->
+    <div class="action-bar">
+        <button class="btn btn-add" onclick="addNewRow()">➕ Inserir Nova Linha</button>
+        <div style="display: flex; gap: 6px;">
+            <button class="btn" onclick="exportBackup()" title="Exportar JSON">📤 Exportar</button>
+            <button class="btn" onclick="triggerImport()" title="Importar JSON">📥 Importar</button>
+            <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="importBackup(event)">
+            <button class="btn" style="background-color: #290808; border-color: #4c1111; color: #f87171" onclick="clearAllData()">⚠️ Zerar Tudo</button>
+        </div>
+    </div>
+
+    <!-- ========================================
+         MODULO DE GUIA DE AJUDA (RETREÁTIL)
+         ======================================== -->
+    <div class="guide-overlay" id="guideOverlay" onclick="toggleHelp()">
+        <div class="guide-container" onclick="event.stopPropagation()">
+            <div class="guide-header">
+                <h2>📖 Guia de Uso Inteligente</h2>
+                <button class="btn" style="padding: 4px 8px;" onclick="toggleHelp()">Fechar ✕</button>
+            </div>
+            <div class="guide-content">
+                <div>
+                    <h3>1. O Conceito da Folha</h3>
+                    <p>Esta ferramenta funciona como uma folha de papel inteligente. Ela salva tudo no seu celular de forma automática e local. Você não corre risco de perder dados mesmo se recarregar a página.</p>
+                </div>
+
+                <div>
+                    <h3>2. Entrada e Edição de Dados</h3>
+                    <p>Para preencher ou alterar qualquer dado, basta tocar diretamente na célula desejada da tabela (Data, Descrição, Valor Deve ou Valor Pago) e digitar. Os cálculos são automáticos.</p>
+                </div>
+
+                <div>
+                    <h3>3. Entenda os Cálculos (Cores)</h3>
+                    <ul>
+                        <li><span class="badge badge-owed">Valor Deve (Vermelho)</span>: Representa o total de um parcelamento ou compromisso assumido. Não diminui seu saldo imediatamente; serve para monitorar sua obrigação.</li>
+                        <li><span class="badge badge-paid">Valor Pago (Azul)</span>: O dinheiro real que saiu do seu bolso. Reduz diretamente seu saldo acumulado.</li>
+                        <li><span class="badge badge-balance">Saldo (Amarelo)</span>: Dinheiro líquido em caixa linha a linha, calculado progressivamente baseado no seu "Principal Inicial" e nos pagamentos executados.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3>4. O que são os Resultados Atuais?</h3>
+                    <p>A linha de totais na base da folha calcula de forma integrada:</p>
+                    <ul>
+                        <li><strong>D.Tot (Dívida Ativa)</strong>: Quanto você ainda deve para quitar as compras ativas de forma consolidada ($Deve - Pago$).</li>
+                        <li><strong>Pg.Tot (Total Pago)</strong>: A soma exata de todo o caixa de saídas.</li>
+                        <li><strong>Saldo Final</strong>: Recursos remanescentes no mês.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3>5. Cópias de Segurança (Backup)</h3>
+                    <p>Utilize os botões <strong>Exportar</strong> para baixar um arquivo JSON com todas as suas informações para o seu computador ou celular, e <strong>Importar</strong> para restaurar um backup existente.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================
+         RODAPÉ E CRÉDITOS ATUALIZADOS
+         ======================================== -->
+    <footer>
+        Carlos Alberto Reis © 2026/2027 · Suporte e Apoio<br>
+        Chave Pix / Fone WhatsApp: <a href="https://wa.me/5561999487649" target="_blank">61999487649</a>
+    </footer>
+
+    <!-- ========================================
+         LÓGICA MATEMÁTICA E PROCESSAMENTO
+         ======================================== -->
+    <script>
+        let sheetData = {
+            principal: 900.00,
+            theme: 'dark',
+            rows: []
+        };
+
+        // INICIALIZAÇÃO DA SESSÃO
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromStorage();
+            applyTheme();
+        });
+
+        // TEMA CLARO/ESCURO
+        function toggleTheme() {
+            sheetData.theme = sheetData.theme === 'dark' ? 'light' : 'dark';
+            applyTheme();
+            saveToStorage();
+        }
+
+        function applyTheme() {
+            document.documentElement.setAttribute('data-theme', sheetData.theme);
+        }
+
+        // ALTERNADORES DO GUIA DE AJUDA
+        function toggleHelp() {
+            const overlay = document.getElementById('guideOverlay');
+            overlay.classList.toggle('active');
+        }
+
+        // RECONCILIAÇÃO MATEMÁTICA DA PLANILHA
+        function recalculateSheet() {
+            const tableRows = document.querySelectorAll('#sheetBody tr');
+            const principal = parseFloat(document.getElementById('principalInput').value) || 0;
+            sheetData.principal = principal;
+
+            let currentBalance = principal;
+            let totalOwedRemaining = 0;
+            let totalPaid = 0;
+
+            sheetData.rows = []; // Limpa vetor interno para reconstrução
+
+            tableRows.forEach((tr, index) => {
+                const dateVal = tr.querySelector('.in-date').value;
+                const descVal = tr.querySelector('.in-desc').value;
+                const owedVal = parseFloat(tr.querySelector('.in-owed').value) || 0;
+                const paidVal = parseFloat(tr.querySelector('.in-paid').value) || 0;
+
+                // Saldo Corrente = Saldo Anterior - Valor Pago
+                currentBalance -= paidVal;
+
+                // Calcula saldo devedor individual (Dívida Restante)
+                let remainingDebt = (owedVal > paidVal) ? (owedVal - paidVal) : 0;
+                totalOwedRemaining += remainingDebt;
+
+                totalPaid += paidVal;
+
+                // Atualiza o input de saldo da linha (Apenas Leitura)
+                tr.querySelector('.in-balance').value = formatNumber(currentBalance);
+
+                // Salva estado da linha
+                sheetData.rows.push({
+                    date: dateVal,
+                    description: descVal,
+                    owed: owedVal,
+                    paid: paidVal
+                });
+            });
+
+            // Atualiza linha de resultados finais (Footer)
+            document.getElementById('totalsOwed').textContent = formatNumber(totalOwedRemaining);
+            document.getElementById('totalsPaid').textContent = formatNumber(totalPaid);
+            document.getElementById('totalsBalance').textContent = formatNumber(currentBalance);
+
+            // Atualiza data do rodapé para o dia atual automaticamente
+            const today = new Date();
+            const formattedToday = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}`;
+            document.getElementById('totalsDate').textContent = formattedToday;
+
+            saveToStorage();
+        }
+
+        function formatNumber(val) {
+            return val.toFixed(2).replace('.', ',');
+        }
+
+        // ADIÇÃO DE NOVA LINHA
+        function addNewRow(date = '', desc = '', owed = '', paid = '') {
+            const tbody = document.getElementById('sheetBody');
+            const tr = document.createElement('tr');
+
+            tr.innerHTML = `
+                <td class="col-date"><input type="text" class="in-date" value="${date}" placeholder="DD/MM" oninput="recalculateSheet()"></td>
+                <td class="col-desc"><input type="text" class="in-desc" value="${desc}" placeholder="Item..." oninput="recalculateSheet()"></td>
+                <td class="col-owed owed-cell"><input type="number" class="in-owed" value="${owed}" placeholder="0,00" step="0.01" oninput="recalculateSheet()"></td>
+                <td class="col-paid paid-cell"><input type="number" class="in-paid" value="${paid}" placeholder="0,00" step="0.01" oninput="recalculateSheet()"></td>
+                <td class="col-balance balance-cell"><input type="text" class="in-balance" readonly value="0,00"></td>
+                <td class="col-action"><button class="delete-btn" onclick="removeRow(this)">✕</button></td>
+            `;
+
+            tbody.appendChild(tr);
+            recalculateSheet();
+        }
+
+        function removeRow(btn) {
+            const row = btn.closest('tr');
+            row.remove();
+            recalculateSheet();
+        }
+
+        // CONTROLES DE ARMAZENAMENTO LOCAL
+        function saveToStorage() {
+            localStorage.setItem('planilha_lite_data_v2', JSON.stringify(sheetData));
+        }
+
+        function loadFromStorage() {
+            const saved = localStorage.getItem('planilha_lite_data_v2');
+            if (saved) {
+                try {
+                    sheetData = JSON.parse(saved);
+                    document.getElementById('principalInput').value = sheetData.principal;
+                    
+                    const tbody = document.getElementById('sheetBody');
+                    tbody.innerHTML = '';
+                    
+                    if (sheetData.rows && sheetData.rows.length > 0) {
+                        sheetData.rows.forEach(r => {
+                            addNewRow(r.date, r.description, r.owed || '', r.paid || '');
+                        });
+                    }
+                } catch(e) {
+                    loadDefaultData();
+                }
+            } else {
+                loadDefaultData();
+            }
+        }
+
+        function loadDefaultData() {
+            document.getElementById('principalInput').value = 900;
+            const tbody = document.getElementById('sheetBody');
+            tbody.innerHTML = '';
+
+            // Dados iniciais do modelo fornecido pelo usuário
+            addNewRow('05/07', 'Luz', '', '60');
+            addNewRow('', 'Erivânia (Bolo)', '150', '50');
+            addNewRow('', 'Dudu (taxa de van)', '200', '100');
+            addNewRow('', 'Compra (Mercado Central)', '', '80');
+        }
+
+        function clearAllData() {
+            if (confirm('Deseja limpar totalmente todas as linhas e zerar o saldo?')) {
+                document.getElementById('principalInput').value = 0;
+                document.getElementById('sheetBody').innerHTML = '';
+                recalculateSheet();
+            }
+        }
+
+        // IMPORTE E EXPORTE DE ARQUIVOS
+        function exportBackup() {
+            try {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sheetData, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `planilha_backup_${Date.now()}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+            } catch(e) {
+                alert("Erro ao exportar planilha.");
+            }
+        }
+
+        function triggerImport() {
+            document.getElementById('importFileInput').click();
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed && typeof parsed.principal === 'number' && Array.isArray(parsed.rows)) {
+                        sheetData = parsed;
+                        document.getElementById('principalInput').value = sheetData.principal;
+                        
+                        const tbody = document.getElementById('sheetBody');
+                        tbody.innerHTML = '';
+                        sheetData.rows.forEach(r => {
+                            addNewRow(r.date, r.description, r.owed || '', r.paid || '');
+                        });
+                        recalculateSheet();
+                        alert("Planilha restaurada com sucesso!");
+                    } else {
+                        alert("Arquivo inválido!");
+                    }
+                } catch(err) {
+                    alert("Erro ao ler JSON.");
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
+--- END OF FILE planilha-contas.txt ---
